@@ -4,7 +4,7 @@
     * a sample that pointer could only point to obj
 */
 /** 
- * Prove
+ * Key Concept
     * read-only pointer-to-non-const can change value of variable instead of address
     * read-only value-to-non-const can change value instead of address
     * read-only value-to-const can change address instead of value
@@ -110,7 +110,7 @@ void callbackFunc_caller_pointer_read_only(ADD_CALLBACK_S *const funcObj, int a,
     funcObj->mod_1 = erroFunct;
     funcObj->mod_2 = callbackFunc_callee_add;
     // it is pointer read only; thus, it could not chage pointer
-    //funcObj = &changObj;
+    // funcObj = &changObj;
 
     if( mod == 0) {
         result =  funcObj->mod_1(a, b);
@@ -129,15 +129,15 @@ void callbackFunc_caller_pointer_read_only(ADD_CALLBACK_S *const funcObj, int a,
 
 int main () {
 
-    printf("testing obj to const ADD_CALLBACK_S *funcObj\n");
-    callbackFunc_caller_value_read_only(&obj_middle_const, 100,20);
-    printf("testing obj to ADD_CALLBACK_S *const funcObj\n");
+    printf("testing obj to const ADD_CALLBACK_S *funcObj\n"); // testing obj value would not be modified in function
+    callbackFunc_caller_value_read_only(&obj, 100,20);
+    printf("testing obj to ADD_CALLBACK_S *const funcObj\n"); // testing function argument would always point to obj; it would not point to other variable
     callbackFunc_caller_pointer_read_only(&obj, 100,20);
-    printf("testing const obj to const ADD_CALLBACK_S *funcObj\n");
+    printf("testing const obj to const ADD_CALLBACK_S *funcObj\n"); // testing obj value would not be modified in function
     callbackFunc_caller_value_read_only(&obj_const, 100, 20);
     
     /** Below is an type conversion code (const ADD_CALLBACK_S to ADD_CALLBACK_S) since the agrument is an read-only pointer with type ADD_BLACK_S **/
     // printf("testing const obj to ADD_CALLBACK_S *const funcObj\n");
-    // callbackFunc_caller_pointer_read_only(&obj_const, 100, 20); // this is an warning, but its code logic is flaw since passing an const variable into a const pointer type with ADD_CALLBACK_S would potentially change its value
+    callbackFunc_caller_pointer_read_only(&obj_const, 100, 20); // this is an warning, but its code logic is flaw since passing an const variable into a const pointer type with ADD_CALLBACK_S would potentially change its value
     return 0;
 }
