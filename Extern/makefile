@@ -1,14 +1,10 @@
 CC = gcc
-OBJ = source.o extern.o
-TARGET = test
+TARGET = extern extern_one_file
 
-all: $(TARGET)
-test: $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET)
-source.o: source.c
-	$(CC) -c source.c
-extern.o: extern.c
-	$(CC) -c extern.c
+extern: extern.c
+	$(CC) extern.c -o extern
+extern_one_file: extern_one_file.c
+	$(CC) extern_one_file.c -o extern_one_file
 
 clean:
-	rm source.o extern.o
+	rm $(TARGET)

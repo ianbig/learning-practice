@@ -1,10 +1,8 @@
 #include <stdio.h>
 
-void paraFunc(a);
-int a;
-
-void paraFunc(a) {
-    printf("a: %d\nb: %d\nc: %d\n", a);
+void paraFunc(a) 
+{
+    printf("a: %d\n", a);
 }
 
 

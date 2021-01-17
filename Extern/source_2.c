@@ -1,1 +1,0 @@
-int source_var  = 10;
