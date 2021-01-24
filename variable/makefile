@@ -1,5 +1,5 @@
 CC = gcc
-TARGET = naming_convention_exec constant type_conversion
+TARGET = naming_convention_exec constant type_conversion register initial preprocessor
 CFLAG = -g -Wall -Werror
 
 all: $(TARGET)
@@ -9,5 +9,11 @@ constant: constant.c
 	$(CC) $(CFLAG) constant.c -o constant
 type_conversion: type_conversion.c
 	$(CC) $(CFLAG) type_conversion.c -o type_conversion
+register: register.c
+	$(CC) $(CFLAG) register.c -o register
+initial: initial.c
+	$(CC) initial.c -o initial
+preprocessor: preprocessor.c
+	$(CC) preprocessor.c -o preprocessor
 clean:
 	rm $(TARGET)
