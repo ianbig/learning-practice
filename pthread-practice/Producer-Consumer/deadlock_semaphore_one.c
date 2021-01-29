@@ -83,7 +83,7 @@ void producer() {
         fprintf(stderr, "Producer produce item %d\n", putItems(index));
         index += 1;
         itemCounts += 1;
-
+m
         if(itemCounts == 1) {
             wake(CONSUMER);
         }
