@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
 	key = ftok(project_path, project_id);
 	pid = getpid();
 
-	snprintf(file_path, MAX_FILE_NAME + strlen("/client_log/n.log"), "%s/client_log/%d.log", working_dir, pid);
+	snprintf(file_path, MAX_FILE_NAME + strlen("/client_log/.log"), "%s/client_log/%d.log", working_dir, pid);
 	FILE *rec_fptr = fopen(file_path, "w+");
 
 	if(rec_fptr == NULL) {
@@ -104,10 +104,10 @@ int main(int argc, char **argv) {
 				if(msgrcv(msq_id, &data_rec, MAX_BYTES, pid, 0) != -1) {
 					fprintf(stderr, "==========\nClient process %d\nQuestion: %s\nAnswer: %s", \
 					pid, argv[1], data_rec.msg.load);
-
 					snprintf(record_buf, RECORD_MAX, "%d, send question %s, receive answer is %s", \
-					pid, data_send.msg.load, data_rec.msg.load);
+					pid, argv[1], data_rec.msg.load);
 					fwrite(record_buf, sizeof(char), strlen(record_buf), rec_fptr);
+					fflush(rec_fptr);
 					memset(record_buf, 0, RECORD_MAX);
 				} else {
 					fprintf(stderr, "Error: message queue is closed\n");
@@ -125,6 +125,7 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	fclose(rec_fptr);
 	return 0;
 }
 

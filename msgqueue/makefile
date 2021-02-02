@@ -17,7 +17,9 @@ board:
 	$(CC_LINARO) ${SRC_MASTER} -o $(TARGET_BOARD_MASTER)
 	$(CC_LINARO) ${SRC_CLIENT} -o $(TARGET_BOARD_CLIENT)
 test: ${TARGET_TEST}
-validate: ${SRC}
+validate: ${SRC_TEST}
 	$(CC) $(SRC_TEST) -o ${TARGET_TEST}
 clean: 
 	rm ${TARGET} ${TARGET_BOARD_MASTER} ${TARGET_BOARD_CLIENT} ${TARGET_TEST}
+cleanlog:	
+	rm -f ./client_log/*.log
