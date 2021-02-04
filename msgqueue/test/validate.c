@@ -25,20 +25,20 @@ typedef struct {
 	char answer[MAXLOAD];
 } DB_S;
 
-void extract_client(char buf[], VALID_S *vptr) {
+int extract_client(char buf[], VALID_S *vptr) {
     char *sptr;
 
     sptr = strtok(buf, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract client pid\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     vptr->pid = atoi(sptr);
 
     sptr = strtok(NULL, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract client question\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     sptr += strlen(" send question ");
     snprintf(vptr->question, sizeof(vptr->question), "%s", sptr);
@@ -46,22 +46,24 @@ void extract_client(char buf[], VALID_S *vptr) {
     sptr = strtok(NULL, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract client question\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     sptr += strlen(" receive answer is ");
     snprintf(vptr->answer, sizeof(vptr->answer), "%s", sptr);
 
     vptr->validate = 0;
 
+    return 0;
 }
 
-void extract_server(char buf[], VALID_S *vptr) {
+int extract_server(char buf[], VALID_S *vptr) {
     char *sptr;
+    int truncated_size = 0;
 
     sptr = strtok(buf, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract server pid\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     sptr += strlen("Answer from ");
     vptr->pid = atoi(sptr);
@@ -69,7 +71,7 @@ void extract_server(char buf[], VALID_S *vptr) {
     sptr = strtok(NULL, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract server question\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     sptr += strlen(" receive question is ");
     snprintf(vptr->question, sizeof(vptr->question), "%s", sptr);
@@ -77,10 +79,12 @@ void extract_server(char buf[], VALID_S *vptr) {
     sptr = strtok(NULL, ",");
     if(sptr == NULL) {
         fprintf(stderr, "Error: unexpected error in extract server answer\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     sptr += strlen(" send answer is ");
     snprintf(vptr->answer, sizeof(vptr->answer), "%s", sptr);
+
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -130,8 +134,11 @@ int main(int argc, char *argv[]) {
         memset(buf, 0, sizeof(buf));
 
         fread(buf, sizeof(char), st_buf.st_size, fptr);
-        extract_client(buf, client_ptr[client_query_num]);   
-
+        if(extract_client(buf, client_ptr[client_query_num]) == -1) {
+            fprintf(stderr, "Error: broken content in %s\n", entry->d_name);
+            continue;
+        }
+           
         memset(buf, 0, sizeof(buf));
         fclose(fptr);
 
@@ -144,11 +151,6 @@ int main(int argc, char *argv[]) {
     }
 
     fprintf(stderr, "query num is %ld\n", client_query_num);
-
-    // for(int i = 0; i < client_query_num; i++) {
-    //     fprintf(stderr, "pid: %d, question: %s, answer: %s validate: %d\n", \
-    //     client_ptr[i]->pid, client_ptr[i]->question, client_ptr[i]->answer, client_ptr[i]->validate);
-    // }
 
     if(errno != 0 ) {
         fprintf(stderr, "Warning: unexpected behavior in parsing client log\n");
@@ -163,60 +165,51 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    
-    VALID_S **server_ptr = NULL;
-    size_t server_capacity = 1;
     size_t server_query_num = 0;
+    int record_count = 0;
+    char *line_ptr = NULL;
+    size_t size = 0;
+    VALID_S *server_ptr = NULL;
 
-    server_ptr = (VALID_S**)malloc(sizeof(VALID_S*) * server_capacity);
+    while(getline(&line_ptr, &size, fptr) != -1) {
+        record_count++;
+    }
+
+    free(line_ptr);
+    line_ptr = NULL;
+    fseek(fptr, 0, SEEK_SET);
+
+    server_ptr = (VALID_S*)malloc(sizeof(VALID_S) * record_count);
     if(server_ptr == NULL) {
-        fprintf(stderr, "Error: unable to malloc memory for server\n");
+        fprintf(stderr, "Error: Heap size inadequate\n");
         exit(EXIT_FAILURE);
     }
 
-    int line_count = 0;
-    char *line_ptr = NULL;
-    size_t size = 0;
-
-    while(getline(&line_ptr, &size, fptr) != -1) {
-        // fprintf(stderr, "%s", line_ptr);
-
-        server_ptr[server_query_num] = (VALID_S*)malloc(sizeof(VALID_S));
-        if(server_ptr[server_query_num] == NULL) {
-            fprintf(stderr, "Error: unable to malloc\n");
-            exit(EXIT_FAILURE);
+    while (getline(&line_ptr, &size, fptr) != -1)
+    {
+        if( extract_server(line_ptr, &server_ptr[server_query_num]) == -1 ) {
+            fprintf(stderr, "Error: broken content in server log\n");
+            break; // still see how many queries is validated
         }
-
-        extract_server(line_ptr, server_ptr[server_query_num]);
         server_query_num++;
-
-        if(server_query_num == server_capacity) {
-            server_capacity *= 5;
-            server_ptr = (VALID_S**)realloc(server_ptr, sizeof(VALID_S*) * server_capacity);
-        }
-        line_count++;
     }
+
     free(line_ptr);
     fclose(fptr);
-
-    // for(int i = 0; i < server_query_num; i++) {
-    //     fprintf(stderr, "pid: %d, question: %s, answer: %s\n", \
-    //     server_ptr[i]->pid, server_ptr[i]->question, server_ptr[i]->answer);
-    // }
 
     int i = 0, j = 0;
     int validated_num = 0;
     for( i = 0; i < server_query_num; i ++) {
         for( j = 0; j < client_query_num; j++) {
-            if(server_ptr[i]->pid != client_ptr[j]->pid) {
+            if(server_ptr[i].pid != client_ptr[j]->pid) {
                 continue;
             }
 
-            if(strcmp(server_ptr[i]->question, client_ptr[j]->question) != 0) {
+            if(strcmp(server_ptr[i].question, client_ptr[j]->question) != 0) {
                 continue;
             }
 
-            if(strcmp(server_ptr[i]->answer, client_ptr[j]->answer) != 0) {
+            if(strcmp(server_ptr[i].answer, client_ptr[j]->answer) != 0) {
                 continue;
             }
 
@@ -242,10 +235,6 @@ int main(int argc, char *argv[]) {
         free(client_ptr[i]);
     }
     free(client_ptr);
-
-    for(i = 0; i < server_query_num; i++) {
-        free(server_ptr[i]);
-    }
     free(server_ptr);
     
     return 0;

@@ -59,8 +59,6 @@ int config_description_log(CONFIG_S *config) {
 	*endptr = '\0';
 	config->server_id = atoi(ptr+1);
 
-	// fprintf(stderr, "key: %d\nserver_id: %d\n", config->key, config->server_id);
-
 	return 0;
 }
 
@@ -79,7 +77,7 @@ int main(int argc, char **argv) {
 
 	char file_path[MAX_FILE_NAME] = {0};
 	snprintf(file_path, sizeof(file_path), "./client_log/%d.log", pid);
-	FILE *rec_fptr = fopen(file_path, "w+");
+	FILE *rec_fptr = fopen(file_path, "w");
 
 	if(rec_fptr == NULL) {
 		fprintf(stderr, "Error: unable create client %d's log\n", pid);
@@ -98,8 +96,8 @@ int main(int argc, char **argv) {
 			if(!msgsnd(msq_id, &data_send, sizeof(data_send.msg.load), IPC_NOWAIT)) {
 				fprintf(stderr, "client pid %d sent to queue\n", pid);
 				if(msgrcv(msq_id, &data_rec, sizeof(data_send.msg.load), pid, 0) != -1) {
-					fprintf(stderr, "==========\nClient process %d\nQuestion: %s\nAnswer: %s\n", \
-					pid, argv[1], data_rec.msg.load);
+					// fprintf(stderr, "==========\nClient process %d\nQuestion: %s\nAnswer: %s\n", \
+					// pid, data_send.msg.load, data_rec.msg.load);
 					fprintf(rec_fptr, "%d, send question %s, receive answer is %s\n", \
 					pid, argv[1], data_rec.msg.load);
 				} else {

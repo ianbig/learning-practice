@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/param.h>
 #include <sys/types.h>
+#include <pthread.h>
 #include "mystruct.h"
 
 
@@ -58,6 +59,7 @@ int setup_db() {
 	FILE *fptr;
 	int db_size = 0;
 	char *buf = NULL;
+	pthread_t poll_thread
 	fptr = fopen("database.txt", "r");
 
 	if(fptr == NULL) {
@@ -193,19 +195,20 @@ int main(int argc, char const *argv[]) {
 
 			}
 		}
+		
 		fclose(fptr);
 	} else {
 		fprintf(stderr, "Error in generating key ......\n");
 		exit(EXIT_FAILURE);
 	}
 
-	fprintf(stderr, "Outside loop\n");
 	free(db);
-	fprintf(stderr, "Outside loop\n");
+	db = NULL;
+	fprintf(stderr, "Recycle db resource\n");
 	remove("./des.log");
-	fprintf(stderr, "Outside loop\n");
+	fprintf(stderr, "Remove des.log\n");
 	msgctl(msq_id, IPC_RMID, NULL);
-	fprintf(stderr, "Outside loop\n");
+	fprintf(stderr, "Close message queue\n");
 	
 	return 0;
 }
