@@ -8,7 +8,9 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/param.h>
+#include <sys/types.h>
 #include "mystruct.h"
+
 
 /*
 	Testing:
@@ -26,97 +28,123 @@
 */
 
 int main_loop = 1;
+DB_S *db = NULL;
 
 void signalHandler() {
 	main_loop = 0;
 	printf("\n");
 }
 
-int main(int argc, char const *argv[]) {
-	int msq_id = -1, i = 0;
-	key_t key;
-
-	MY_DATA_S data_rec;
-	MY_DATA_S data_send;
-
-	DB_S mydb;
-
-	char file_path[MAX_FILE_NAME] = {0};
-	char db_path[MAX_BYTES] = {0};
-	char des_path[MAX_BYTES] = {0};
-	unsigned int pid = getpid();
+key_t create_log(pid_t pid) {
 	int project_id = pid % 255;
+	project_id = 1;
+	key_t key = 0;
+	FILE *fptr = fopen("./des.log", "w");
+	key = ftok("./des.log", project_id);
 
-	signal(SIGINT, signalHandler);
-
-	getcwd(file_path, MAX_FILE_NAME);
-
-	snprintf(des_path, MAX_BYTES, "%s/des.log", file_path);
-	FILE *des_fptr = fopen(des_path, "w+");
-	char logmsg[MAX_BYTES] = {0};
-
-	if(des_fptr == NULL) {
+	if(fptr == NULL) {
 		fprintf(stderr, "Error: Unexpect action in writing description log\n");
-		exit(EXIT_FAILURE);
+		return -1;
 	}
 
-	snprintf(logmsg, MAX_BYTES, "server_id:%d\nproject_path:%s\nproject_id:%d\n", pid, file_path, project_id);
-	fwrite(logmsg, sizeof(char), strlen(logmsg), des_fptr);
-	fflush(des_fptr);
-	fclose(des_fptr);	
-	
-	DB_S **db = NULL;
-	int db_size = 1;
-	int question_num = 0;
-	snprintf(db_path, MAX_BYTES, "%s/database.txt", file_path);
-	FILE *db_fptr = fopen(db_path, "r");
+	fprintf(fptr, "key:%d\nserver_pid:%d\n", key, pid);
 
-	if(des_fptr == NULL) {
+	fclose(fptr);
+
+	return key;
+}
+
+int setup_db() {
+	FILE *fptr;
+	int db_size = 0;
+	char *buf = NULL;
+	fptr = fopen("database.txt", "r");
+
+	if(fptr == NULL) {
 		fprintf(stderr, "Error: Unexpect action in open description log in master\n");
 		exit(EXIT_FAILURE);
 	}
 
-	if( (db = (DB_S**)malloc(sizeof(DB_S*) * db_size)) == NULL ) {
-		fprintf(stderr, "Error: Unexpected behavior in creating DB\n");
+	fseek(fptr, 0, SEEK_END);
+	db_size = ftell(fptr);
+	fseek(fptr, 0, SEEK_SET);
+
+	buf = (char*)malloc(sizeof(char) * (db_size + 1));
+	if(buf == NULL) {
+		fprintf(stderr, "Error: malloc error\n");
+		return -1;
+	}
+
+	fread(buf, sizeof(char), db_size, fptr);
+	buf[db_size] = '\0';
+
+	int count = 0;
+	int set_count = 0;
+	char *ptr = NULL;
+	while((ptr = strchr(buf, '\n') )!= NULL) {
+		count++;
+		if(count % 2 == 0) {
+			*ptr = '.';
+			set_count++;
+		} else {
+			*ptr = '?';
+		}
+	}
+	fclose(fptr);
+
+	db = (DB_S*)malloc(sizeof(DB_S) * set_count);
+	if(db == NULL) {
+		fprintf(stderr, "Error: unable to malloc\n");
+		return -1;
+	}
+
+	int index = 0;
+	char *preptr = buf;
+	int copy_size = 0;
+	count = 1;
+	while(index + 1 <= set_count) {
+		if(count % 2 == 0) {
+			ptr = strchr(buf, '.');
+			*ptr = '\n';
+			copy_size = ptr - preptr;
+			snprintf(db[index].answer, copy_size + 1, "%s", preptr);
+			preptr = ptr + 1;
+			index++;
+		} else {
+			ptr = strchr(buf, '?');
+			*ptr = '\n';
+			copy_size = ptr - preptr;
+			snprintf(db[index].question, copy_size + 1, "%s", preptr);
+			preptr = ptr + 1;
+		}
+		count++;
+	}
+
+	free(buf);
+
+	return set_count;
+}
+
+int main(int argc, char const *argv[]) {
+	signal(SIGINT, signalHandler);
+
+	int question_num = -1;
+	int i =0;
+
+	question_num = setup_db();
+	if(question_num == -1) {
+		fprintf(stderr, "Error: unexpected behavior in create db");
 		exit(EXIT_FAILURE);
 	}
 
-	char *buf = NULL;
-	size_t size = 0;
-	int line_count = 0;
-	int length = 0;
+	pid_t pid = getpid();
+	int project_id = pid % 255;
+	key_t key = 0;
+	int msq_id = -1;
+	MY_DATA_S data_rec, data_send;
+	FILE *fptr = NULL;
 
-	while( (length = getline(&buf, &size, db_fptr)) != -1) {
-		line_count++;
-
-		if((line_count % 2) == 0) {
-			if((db[question_num]->answer = (char*)malloc(sizeof(char) * (length + 1 ))) == NULL) {
-				fprintf(stderr, "Error: malloc error\n");
-				exit(EXIT_FAILURE);
-			}
-			snprintf(db[question_num]->answer, length + 1, "%s", buf);
-			question_num++;
-
-			if(question_num == db_size) {
-				db_size = db_size * 5;
-				db = (DB_S**)realloc(db, db_size * sizeof(DB_S*));
-			}
-		} else {
-			db[question_num] = (DB_S*)malloc(sizeof(DB_S) * 1);
-
-			if( (db[question_num]->question = (char*)malloc(sizeof(char) * (length + 1))) == NULL ) {
-				fprintf(stderr, "Error: malloc error\n");
-				exit(EXIT_FAILURE);
-			}
-			snprintf(db[question_num]->question, length + 1, "%s", buf);
-			db[question_num]->question[length-1] = '\0';
-		}
-	}
-	free(buf);
-
-	fclose(db_fptr);
-
-	key = ftok(file_path, project_id);
+	key = create_log(pid);
 
 	if(key !=  -1) {
 		if((msq_id = msgget(key, IPC_CREAT)) != -1 ) {
@@ -126,36 +154,35 @@ int main(int argc, char const *argv[]) {
 			exit(EXIT_FAILURE);
 		}
 
-		char r_path[MAX_BYTES] = {0};
-		char record_buf[RECORD_MAX] = {0};
-		snprintf(r_path, MAX_BYTES, "%s/record.log", file_path);
-		FILE *r_fptr = fopen(r_path, "a+");
+		fptr = fopen("./record.log", "a");
+		if(fptr == NULL) {
+			fprintf(stderr, "Error: unable to open record log\n");
+			exit(EXIT_FAILURE);
+		}
 
-		fprintf(stderr, "=====Resolving for Request========\n");
+		fprintf(stderr, "=====Server pid %d on========\n", pid);
 		 while(main_loop) {
-			if( msgrcv(msq_id, &data_rec, MAX_BYTES, pid, IPC_NOWAIT) != -1) {
+			if( msgrcv(msq_id, &data_rec, sizeof(data_rec.msg.load), pid, IPC_NOWAIT) != -1) {
 				// fprintf(stderr, "Server receive message from process %lld\n", data_rec.msg.from);
 				data_send.to = data_rec.msg.from;
 				data_send.msg.from = data_rec.to;
-				
+
 				for(i = 0; i < question_num; i++) {
-					if( strcmp(data_rec.msg.load, db[i]->question) == 0) {
-						snprintf(data_send.msg.load, MAX_LOAD, "%s", db[i]->answer);
+					if( strcmp(data_rec.msg.load, db[i].question) == 0) {
+						snprintf(data_send.msg.load, sizeof(data_send.msg.load), "%s", db[i].answer);
 						break;
 					} 
 				}
 
 				if( i == question_num ) {
-					snprintf(data_send.msg.load, 20, "No such question\n");
+					snprintf(data_send.msg.load, sizeof(data_send.msg.load), "No such question\n");
 				}
-				
-				if(!msgsnd(msq_id, &data_send, MAX_BYTES, IPC_NOWAIT)) {
-					snprintf(record_buf, RECORD_MAX, "Answer from %lld, receive question is %s, send answer is %s", data_rec.msg.from, data_rec.msg.load, data_send.msg.load);
-					fwrite(record_buf, sizeof(char), strlen(record_buf) +1, r_fptr);
-					fflush(r_fptr);
-					memset(record_buf, 0, sizeof(record_buf));
+
+				if(!msgsnd(msq_id, &data_send, sizeof(data_send.msg.load), IPC_NOWAIT)) {
+					fprintf(fptr, "Answer from %ld, receive question is %s, send answer is %s\n", data_rec.msg.from, data_rec.msg.load, data_send.msg.load);
+					fflush(fptr);
 				} else {
-					perror("Error: ");
+					perror("Error: Server not send ");
 					continue;
 				}
 			} else {
@@ -163,25 +190,22 @@ int main(int argc, char const *argv[]) {
 					fprintf(stderr, "receive type is too short\n");
 					break;
 				}
+
 			}
 		}
-		
-		fclose(r_fptr);
+		fclose(fptr);
 	} else {
 		fprintf(stderr, "Error in generating key ......\n");
 		exit(EXIT_FAILURE);
 	}
 
-
-	for(i = 0; i < question_num; i++) {
-		free(db[i]->question);
-		free(db[i]->answer);
-		free(db[i]);
-	}
-
+	fprintf(stderr, "Outside loop\n");
 	free(db);
-	remove(des_path);
+	fprintf(stderr, "Outside loop\n");
+	remove("./des.log");
+	fprintf(stderr, "Outside loop\n");
 	msgctl(msq_id, IPC_RMID, NULL);
+	fprintf(stderr, "Outside loop\n");
 	
 	return 0;
 }

@@ -9,81 +9,76 @@
 #include <string.h>
 #include "mystruct.h"
 
+typedef struct {
+	key_t key;
+	pid_t server_id;
+} CONFIG_S;
+
+
+int config_description_log(CONFIG_S *config) {
+
+	char buf[MAX_BYTES] = {0};
+	int file_size = 0;
+	int msq_id = 0;
+
+	FILE *fptr = fopen("./des.log", "r");
+
+	if(fptr == NULL) {
+		fprintf(stderr, "Error: no description log or description log closed\n");
+		exit(EXIT_FAILURE); // no description log means master is closed
+	}
+
+	fseek(fptr, 0, SEEK_END);
+	file_size = ftell(fptr);
+	fseek(fptr, 0, SEEK_SET);
+
+	fread(buf, sizeof(char), file_size, fptr);
+
+	char *ptr = NULL, *endptr = NULL;
+
+	ptr = strchr(buf, ':');
+	endptr = strchr(buf, '\n');
+	if(ptr == NULL || endptr == NULL) {
+		fprintf(stderr, "Error: unexpected error in description log\n");
+		return -1;
+	}
+	*endptr = '\0';
+	config->key = atoi(ptr+1);
+
+	ptr = endptr + 1;
+	ptr = strchr(ptr, ':');
+	if(ptr == NULL) {
+		fprintf(stderr, "Error: unexpected error in description log\n");
+		return -1;
+	}
+	endptr = strchr(ptr, '\n');
+	if(endptr == NULL) {
+		fprintf(stderr, "Error: unexpected error in description log\n");
+		return -1;
+	}
+	*endptr = '\0';
+	config->server_id = atoi(ptr+1);
+
+	// fprintf(stderr, "key: %d\nserver_id: %d\n", config->key, config->server_id);
+
+	return 0;
+}
+
 int main(int argc, char **argv) {
-
-	struct stat st_buf;
-	char working_dir[MAX_FILE_NAME] = {0};
-	char file_path[MAX_BYTES] = {0};
-
 	if(argc != 2) {
 		fprintf(stderr, "Usage: ./client [question type]\n");
 		exit(EXIT_FAILURE);
 	}
 
-	if(getcwd(working_dir, MAX_FILE_NAME) == NULL) {
-		fprintf(stderr, "Error: unable to get working directory\n");
-		exit(EXIT_FAILURE);
-	}
-	snprintf(file_path, MAX_BYTES, "%s/des.log", working_dir);
+	CONFIG_S config;
+	config_description_log(&config);
 
-	FILE *des_fptr = fopen(file_path, "r");
-
-	if(des_fptr == NULL) {
-		fprintf(stderr, "Error: no description log or description log closed\n");
-		return 0; // no description log means master is closed
-	}
-
-	if(stat(file_path, &st_buf) == -1) {
-		fprintf(stderr, "Error: unable to read description log stat\n");
-		exit(EXIT_FAILURE); // since cannot get key
-	}
-
-	char *lineptr = NULL;
-	char *mvptr = NULL;
-	size_t size = 0;
-	unsigned int project_id = 0;
-	char project_path[MAX_BYTES] = {0};
-	unsigned int server_id = 0;
-
-	while( getline(&lineptr, &size, des_fptr) != -1 ) {
-		if( (mvptr = strtok(lineptr, ":")) != NULL) {
-			mvptr += strlen(mvptr) + 1;
-			mvptr[strlen(mvptr)-1] = '\0';
-			
-			if(strcmp(lineptr, "project_path") == 0) {
-				snprintf(project_path, strlen(mvptr) + 1, "%s", mvptr);
-			} else if(strcmp(lineptr, "project_id") == 0) {
-				project_id = atoi(mvptr);
-			} else if(strcmp(lineptr, "server_id") == 0) {
-				server_id = atoi(mvptr);
-			}else {
-				fprintf(stderr, "Error: wrong file indicator %s\n", lineptr);
-				exit(EXIT_FAILURE);
-			}
-		} else {
-			fprintf(stderr, "Error: wrong format in description log\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	free(lineptr);
-	lineptr = NULL;
-	fclose(des_fptr);
-	memset(file_path, 0, MAX_BYTES);
-
-	int msq_id;
-	key_t key;
-	pid_t pid;
-	char record_buf[RECORD_MAX] = {0};
-
+	pid_t pid = getpid();
 	MY_DATA_S data_rec;
 	MY_DATA_S data_send;
 
-	size = 0;
-	key = ftok(project_path, project_id);
-	pid = getpid();
-
-	snprintf(file_path, MAX_FILE_NAME + strlen("/client_log/.log"), "%s/client_log/%d.log", working_dir, pid);
+	char file_path[MAX_FILE_NAME] = {0};
+	snprintf(file_path, sizeof(file_path), "./client_log/%d.log", pid);
 	FILE *rec_fptr = fopen(file_path, "w+");
 
 	if(rec_fptr == NULL) {
@@ -91,27 +86,25 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	if(key != -1) {
-		if( (msq_id = msgget(key, IPC_CREAT)) != -1) {
-			// fprintf(stderr, "Connecting to msq id: %d\n", msq_id);
+	int msq_id;
+	if(config.key != -1) {
+		if( (msq_id = msgget(config.key, IPC_CREAT)) != -1) {
+			fprintf(stderr, "Connecting to msq id: %d\n", msq_id);
 
-			data_send.to = server_id;
+			data_send.to = config.server_id;
 			data_send.msg.from = pid;
-			snprintf(data_send.msg.load, MAX_LOAD, "%s", argv[1]);
+			snprintf(data_send.msg.load, sizeof(data_send.msg.load), "%s", argv[1]);
 
-			if(!msgsnd(msq_id, &data_send, MAX_BYTES, IPC_NOWAIT)) {
-				// fprintf(stderr, "client pid %d sent to queue\n", pid);
-				if(msgrcv(msq_id, &data_rec, MAX_BYTES, pid, 0) != -1) {
-					fprintf(stderr, "==========\nClient process %d\nQuestion: %s\nAnswer: %s", \
+			if(!msgsnd(msq_id, &data_send, sizeof(data_send.msg.load), IPC_NOWAIT)) {
+				fprintf(stderr, "client pid %d sent to queue\n", pid);
+				if(msgrcv(msq_id, &data_rec, sizeof(data_send.msg.load), pid, 0) != -1) {
+					fprintf(stderr, "==========\nClient process %d\nQuestion: %s\nAnswer: %s\n", \
 					pid, argv[1], data_rec.msg.load);
-					snprintf(record_buf, RECORD_MAX, "%d, send question %s, receive answer is %s", \
+					fprintf(rec_fptr, "%d, send question %s, receive answer is %s\n", \
 					pid, argv[1], data_rec.msg.load);
-					fwrite(record_buf, sizeof(char), strlen(record_buf), rec_fptr);
-					fflush(rec_fptr);
-					memset(record_buf, 0, RECORD_MAX);
 				} else {
 					fprintf(stderr, "Error: message queue is closed\n");
-					//perror("Error: ");
+					perror("Error: Client cannot connect to msq");
 				}
 			} else {
 				fprintf(stderr, "Error: client unable to send message\n");

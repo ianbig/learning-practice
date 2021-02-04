@@ -15,12 +15,12 @@ question=$(awk "NR==${FILE_LINE}" question.txt)
 sec=$(date '+%S')
 i=0
 echo ${sec}
-while [ $(( $(date '+%S') - ${sec} )) -lt "1" ]
+while [ $(( $(date '+%S') - ${sec} )) -lt "10" ]
 do
     # sleep ${sleep_sec}
-    sudo ./client "${question}" &
+    ./client "${question}" &
 
-    # i=$(( ${i} + 1))
+    i=$(( ${i} + 1))
     # sleep_sec=$((${RANDOM} % ${DIV} + 3))
     # sleep_sec=$(echo "scale=3; ${sleep_sec} / 1000" | bc)
 
