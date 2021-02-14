@@ -6,6 +6,7 @@
 
 int main(int argc, char const *argv[])
 {
+
     ppl_s ppl;
     mode_enum pre_mode;
     action_enum action;

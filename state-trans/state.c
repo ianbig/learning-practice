@@ -10,7 +10,7 @@ ppl_state_enum do_singal_state(ppl_s *ppl);
 ppl_state_enum do_dated_state(ppl_s *ppl);
 ppl_state_enum do_marriage_state(ppl_s *ppl);
 
-calculate_new_state_func * const state_table[NUM_STATES] = {
+calculate_new_state_func* const state_table[NUM_STATES] = {
     do_singal_state,
     do_dated_state,
     do_marriage_state
@@ -23,7 +23,7 @@ void do_marriage_to_singal(ppl_s *ppl);
 void do_marriage_to_dated(ppl_s *ppl);
 
 
-state_transition_table_func * const transition_table[NUM_STATES][NUM_STATES] = {
+state_transition_table_func* const transition_table[NUM_STATES][NUM_STATES] = {
     {NULL, do_singal_to_dated, NULL},
     {do_dated_to_singal, NULL, do_dated_to_marriage},
     {do_marriage_to_singal, do_marriage_to_dated, NULL}
@@ -97,7 +97,7 @@ ppl_state_enum do_marriage_state(ppl_s *ppl) {
 
 ppl_state_enum state_ppl_transition(ppl_state_enum curstate, ppl_s *ppl) {
     ppl_state_enum new_state = state_table[curstate](ppl);
-    state_transition_table_func *transition = transition_table[curstate][new_state];
+    state_transition_table_func *const transition = transition_table[curstate][new_state];
 
     if(transition) {
         transition(ppl);

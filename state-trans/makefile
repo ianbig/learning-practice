@@ -13,3 +13,4 @@ main.o: main.c
 clean:
 	rm ${OBJ}
 	rm ${TARGET}
+	rm state.log
